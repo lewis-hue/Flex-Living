@@ -1,0 +1,1006 @@
+# Flex Living Real-time Analytics System - Performance Optimization Guide
+
+## 🎯 Performance Targets & SLA
+
+### Real-time Performance Requirements
+| Component | Target | Measurement | Alert Threshold |
+|-----------|--------|-------------|-----------------|
+| WebSocket Latency | < 50ms (average) | End-to-end message processing | > 100ms |
+| API Response Time | < 100ms (95th percentile) | HTTP request to response | > 500ms |
+| Event Processing Rate | > 1000 events/second | Events processed per second | < 500 events/second |
+| Database Query Time | < 50ms (average) | Query execution time | > 200ms |
+| Dashboard Load Time | < 2 seconds | Page render to interactive | > 5 seconds |
+| System Uptime | 99.9% | Service availability | < 99.5% |
+
+### Scaling Requirements
+- **Concurrent WebSocket Connections**: 5,000+ per instance
+- **Event Throughput**: 10,000+ events/second
+- **Database Connections**: 500+ concurrent
+- **API Requests**: 1,000+ requests/second
+- **Memory Usage**: < 80% under normal load
+- **CPU Usage**: < 70% under normal load
+
+## ⚡ Database Performance Optimization
+
+### PostgreSQL Optimization
+
+#### Configuration Tuning
+```sql
+-- Performance-optimized postgresql.conf
+shared_buffers = 256MB                    # 25% of total RAM
+effective_cache_size = 1GB                # Estimate of OS cache
+maintenance_work_mem = 64MB               # For VACUUM, CREATE INDEX
+checkpoint_completion_target = 0.9        # Spread checkpoints
+wal_buffers = 16MB                        # WAL buffer size
+default_statistics_target = 100           # Statistics collection
+random_page_cost = 1.1                    # SSD optimization
+effective_io_concurrency = 200            # SSD optimization
+
+-- Connection tuning
+max_connections = 200
+superuser_reserved_connections = 3
+
+-- Query optimization
+work_mem = 4MB                            # Per operation memory
+hash_mem_multiplier = 2.0                 # Hash operation memory
+```
+
+#### Index Strategy
+```sql
+-- Performance-critical indexes
+CREATE INDEX CONCURRENTLY idx_reviews_property_rating 
+ON reviews(property_id, rating) 
+WHERE rating IS NOT NULL;
+
+CREATE INDEX CONCURRENTLY idx_reviews_created_at_desc 
+ON reviews(created_at DESC);
+
+CREATE INDEX CONCURRENTLY idx_sentiment_score_range 
+ON sentiment_analysis(property_id, sentiment_score) 
+WHERE sentiment_score IS NOT NULL;
+
+CREATE INDEX CONCURRENTLY idx_property_performance_score 
+ON property_performance(property_id, performance_score DESC);
+
+-- Composite indexes for common queries
+CREATE INDEX CONCURRENTLY idx_reviews_property_date 
+ON reviews(property_id, created_at DESC) 
+WHERE created_at >= CURRENT_DATE - INTERVAL '30 days';
+
+-- Partial indexes for filtered queries
+CREATE INDEX CONCURRENTLY idx_active_properties 
+ON properties(id) 
+WHERE status = 'active';
+```
+
+#### Query Optimization
+```sql
+-- Optimized analytics queries
+WITH property_metrics AS (
+  SELECT 
+    p.id as property_id,
+    p.name,
+    COUNT(r.id) as total_reviews,
+    AVG(r.rating) as avg_rating,
+    AVG(s.sentiment_score) as avg_sentiment
+  FROM properties p
+  LEFT JOIN reviews r ON p.id = r.property_id
+  LEFT JOIN sentiment_analysis s ON r.id = s.review_id
+  WHERE p.status = 'active'
+  GROUP BY p.id, p.name
+)
+SELECT * FROM property_metrics
+WHERE avg_rating >= 4.0
+ORDER BY avg_rating DESC, total_reviews DESC
+LIMIT 100;
+
+-- Efficient time-series queries
+SELECT 
+  DATE_TRUNC('hour', created_at) as hour,
+  COUNT(*) as review_count,
+  AVG(rating) as avg_rating
+FROM reviews
+WHERE created_at >= NOW() - INTERVAL '24 hours'
+GROUP BY DATE_TRUNC('hour', created_at)
+ORDER BY hour;
+```
+
+### MongoDB Optimization
+
+#### Index Strategy
+```javascript
+// Performance-critical indexes
+db.reviews.createIndex(
+  { "property_id": 1, "created_at": -1 },
+  { "name": "idx_property_date", "background": true }
+);
+
+db.sentiment_analysis.createIndex(
+  { "property_id": 1, "sentiment_score": 1 },
+  { "name": "idx_sentiment_score", "background": true }
+);
+
+db.analytics_overview.createIndex(
+  { "timestamp": -1, "type": 1 },
+  { "name": "idx_analytics_type", "background": true }
+);
+
+// Compound indexes for aggregations
+db.reviews.aggregate([
+  {
+    $match: {
+      "created_at": { $gte: new Date(Date.now() - 30*24*60*60*1000) }
+    }
+  },
+  {
+    $group: {
+      _id: "$property_id",
+      avg_rating: { $avg: "$rating" },
+      review_count: { $sum: 1 }
+    }
+  },
+  { $sort: { avg_rating: -1 } }
+]);
+```
+
+#### Sharding Strategy
+```javascript
+// Shard key selection for scalability
+sh.shardCollection("flex_living_analytics.reviews", { "property_id": 1 });
+sh.shardCollection("flex_living_analytics.sentiment_analysis", { "property_id": 1 });
+
+// Enable balancer for even distribution
+sh.enableBalancing("flex_living_analytics.reviews");
+sh.setBalancerState(true);
+```
+
+## 🔄 Application Performance Optimization
+
+### Python Performance Optimization
+
+#### Async/Await Optimization
+```python
+# Optimized async database operations
+import asyncio
+import asyncpg
+from typing import List, Dict, Any
+
+class OptimizedDatabaseManager:
+    def __init__(self, connection_pool_size: int = 20):
+        self.pool = None
+        self.connection_pool_size = connection_pool_size
+    
+    async def initialize(self):
+        self.pool = await asyncpg.create_pool(
+            DATABASE_URL,
+            min_size=5,
+            max_size=self.connection_pool_size,
+            command_timeout=30
+        )
+    
+    async def batch_get_properties(self, property_ids: List[str]) -> List[Dict]:
+        """Optimized batch property retrieval"""
+        async with self.pool.acquire() as connection:
+            query = """
+            SELECT id, name, address, status, created_at
+            FROM properties 
+            WHERE id = ANY($1)
+            """
+            rows = await connection.fetch(query, property_ids)
+            return [dict(row) for row in rows]
+    
+    async def get_property_analytics_optimized(self, property_id: str) -> Dict:
+        """Optimized analytics query with minimal round trips"""
+        async with self.pool.acquire() as connection:
+            # Single query with all needed data
+            query = """
+            SELECT 
+                p.id, p.name, p.status,
+                COUNT(r.id) as total_reviews,
+                AVG(r.rating) as avg_rating,
+                MAX(r.created_at) as last_review_date,
+                AVG(s.sentiment_score) as avg_sentiment
+            FROM properties p
+            LEFT JOIN reviews r ON p.id = r.property_id
+            LEFT JOIN sentiment_analysis s ON r.id = s.review_id
+            WHERE p.id = $1
+            GROUP BY p.id, p.name, p.status
+            """
+            row = await connection.fetchrow(query, property_id)
+            return dict(row) if row else {}
+```
+
+#### Caching Strategy
+```python
+# Multi-layer caching implementation
+import redis
+import json
+from functools import wraps
+from typing import Any, Optional
+
+class PerformanceCache:
+    def __init__(self, redis_client: redis.Redis):
+        self.redis = redis_client
+        self.local_cache = {}
+        self.cache_stats = {"hits": 0, "misses": 0}
+    
+    def cache_result(self, ttl: int = 300, key_prefix: str = "flex:"):
+        """Decorator for caching function results"""
+        def decorator(func):
+            @wraps(func)
+            async def wrapper(*args, **kwargs):
+                # Generate cache key
+                cache_key = f"{key_prefix}{func.__name__}:{hash(str(args) + str(kwargs))}"
+                
+                # Try local cache first
+                if cache_key in self.local_cache:
+                    self.cache_stats["hits"] += 1
+                    return self.local_cache[cache_key]
+                
+                # Try Redis cache
+                try:
+                    cached_result = await self.redis.get(cache_key)
+                    if cached_result:
+                        result = json.loads(cached_result)
+                        self.local_cache[cache_key] = result
+                        self.cache_stats["hits"] += 1
+                        return result
+                except Exception as e:
+                    logger.warning(f"Redis cache miss: {e}")
+                
+                # Execute function and cache result
+                self.cache_stats["misses"] += 1
+                if asyncio.iscoroutinefunction(func):
+                    result = await func(*args, **kwargs)
+                else:
+                    result = func(*args, **kwargs)
+                
+                # Cache in both layers
+                try:
+                    await self.redis.setex(
+                        cache_key, 
+                        ttl, 
+                        json.dumps(result, default=str)
+                    )
+                    self.local_cache[cache_key] = result
+                except Exception as e:
+                    logger.warning(f"Failed to cache result: {e}")
+                
+                return result
+            return wrapper
+        return decorator
+
+# Usage example
+@PerformanceCache(redis_client).cache_result(ttl=300)
+async def get_property_performance(property_id: str) -> Dict[str, Any]:
+    """Cached property performance data"""
+    # Expensive analytics computation
+    return await expensive_analytics_computation(property_id)
+```
+
+#### Memory Optimization
+```python
+# Memory-efficient data processing
+import gc
+from typing import Generator
+import asyncio
+
+class MemoryOptimizedProcessor:
+    def __init__(self, batch_size: int = 1000):
+        self.batch_size = batch_size
+    
+    async def process_large_dataset(self, data_generator: Generator) -> None:
+        """Process large datasets in memory-efficient batches"""
+        batch = []
+        processed_count = 0
+        
+        for item in data_generator:
+            batch.append(item)
+            
+            if len(batch) >= self.batch_size:
+                # Process batch
+                await self.process_batch(batch)
+                
+                # Clean up memory
+                batch.clear()
+                gc.collect()
+                
+                processed_count += self.batch_size
+                logger.info(f"Processed {processed_count} items")
+                
+                # Allow other tasks to run
+                await asyncio.sleep(0)
+        
+        # Process remaining items
+        if batch:
+            await self.process_batch(batch)
+    
+    async def process_batch(self, batch: List[Dict]) -> None:
+        """Process a batch of data"""
+        # Implement batch processing logic
+        for item in batch:
+            await self.process_single_item(item)
+```
+
+### WebSocket Performance Optimization
+
+#### Connection Management
+```python
+# Optimized WebSocket connection handling
+import asyncio
+from collections import defaultdict
+import weakref
+
+class OptimizedWebSocketManager:
+    def __init__(self, max_connections: int = 5000):
+        self.max_connections = max_connections
+        self.active_connections = weakref.WeakSet()
+        self.connection_stats = defaultdict(int)
+        self.message_queue = asyncio.Queue(maxsize=10000)
+        self.batch_timer = None
+        self.batch_size = 50
+        
+    async def handle_connection(self, websocket, path):
+        """Optimized connection handling"""
+        if len(self.active_connections) >= self.max_connections:
+            await websocket.close(code=1008, reason="Server overload")
+            return
+        
+        # Add to active connections
+        self.active_connections.add(websocket)
+        self.connection_stats["total_connections"] += 1
+        
+        try:
+            # Process messages with batching
+            async for message in websocket:
+                await self.message_queue.put((websocket, message))
+                
+                # Start batch processing if not already running
+                if not self.batch_timer:
+                    self.batch_timer = asyncio.create_task(self.process_message_batch())
+                    
+        except Exception as e:
+            logger.error(f"WebSocket error: {e}")
+        finally:
+            self.active_connections.discard(websocket)
+    
+    async def process_message_batch(self):
+        """Process messages in batches for efficiency"""
+        batch = []
+        timeout = 0.1  # 100ms timeout
+        
+        try:
+            while True:
+                try:
+                    # Get message with timeout
+                    message = await asyncio.wait_for(
+                        self.message_queue.get(), 
+                        timeout=timeout
+                    )
+                    batch.append(message)
+                    
+                    # Process batch if full
+                    if len(batch) >= self.batch_size:
+                        await self.process_batch(batch)
+                        batch.clear()
+                        
+                except asyncio.TimeoutError:
+                    # Timeout - process remaining messages
+                    if batch:
+                        await self.process_batch(batch)
+                        batch.clear()
+                    break
+                    
+        finally:
+            self.batch_timer = None
+    
+    async def process_batch(self, batch: List):
+        """Process a batch of messages efficiently"""
+        # Group messages by type for optimized processing
+        message_groups = defaultdict(list)
+        for websocket, message in batch:
+            try:
+                message_data = json.loads(message)
+                message_type = message_data.get("type", "unknown")
+                message_groups[message_type].append((websocket, message_data))
+            except json.JSONDecodeError:
+                await websocket.send(json.dumps({"error": "Invalid JSON"}))
+        
+        # Process each group
+        for message_type, messages in message_groups.items():
+            await self.process_message_group(message_type, messages)
+```
+
+## 🚀 Frontend Performance Optimization
+
+### React Performance Optimization
+
+#### Component Optimization
+```typescript
+// Optimized React components for real-time data
+import React, { memo, useMemo, useCallback, useRef } from 'react';
+import { useAdvancedAnalyticsWebSocket } from '@/services/advancedWebSocketService';
+
+interface OptimizedAnalyticsDashboardProps {
+  propertyId: string;
+  refreshInterval?: number;
+}
+
+const OptimizedAnalyticsDashboard: React.FC<OptimizedAnalyticsDashboardProps> = memo(({ 
+  propertyId, 
+  refreshInterval = 5000 
+}) => {
+  // Use WebSocket hook for real-time data
+  const {
+    isConnected,
+    usePropertyUpdates,
+    useSentimentChanges,
+    useAIInsights,
+    usePerformanceMetrics
+  } = useAdvancedAnalyticsWebSocket(true);
+  
+  // Memoized data fetching to prevent unnecessary re-renders
+  const propertyUpdates = usePropertyUpdates(propertyId);
+  const sentimentChanges = useSentimentChanges(propertyId);
+  const aiInsights = useAIInsights(propertyId);
+  const performanceMetrics = usePerformanceMetrics();
+  
+  // Memoized calculations
+  const metrics = useMemo(() => {
+    const latestUpdate = propertyUpdates[propertyUpdates.length - 1];
+    const latestSentiment = sentimentChanges[sentimentChanges.length - 1];
+    
+    return {
+      currentRating: latestUpdate?.metrics?.rating || 0,
+      sentimentScore: latestSentiment?.sentiment_score || 0,
+      trend: calculateTrend(propertyUpdates),
+      performance: performanceMetrics.connectionQuality
+    };
+  }, [propertyUpdates, sentimentChanges, performanceMetrics]);
+  
+  // Memoized event handlers
+  const handlePropertySelect = useCallback((newPropertyId: string) => {
+    // Optimized property selection
+    console.log('Switching to property:', newPropertyId);
+  }, []);
+  
+  const handleRefresh = useCallback(() => {
+    // Force refresh data
+    console.log('Manual refresh triggered');
+  }, []);
+  
+  return (
+    <div className="analytics-dashboard">
+      <div className="connection-status">
+        <ConnectionIndicator isConnected={isConnected} />
+        <PerformanceMetrics metrics={performanceMetrics} />
+      </div>
+      
+      <MetricsDisplay metrics={metrics} />
+      
+      <RealTimeChart 
+        data={propertyUpdates}
+        propertyId={propertyId}
+        refreshInterval={refreshInterval}
+      />
+      
+      <SentimentAnalysis 
+        data={sentimentChanges}
+        propertyId={propertyId}
+      />
+      
+      <AIInsightsPanel 
+        insights={aiInsights}
+        propertyId={propertyId}
+      />
+    </div>
+  );
+});
+
+// Memoized chart component
+const RealTimeChart = memo(({ data, propertyId, refreshInterval }: ChartProps) => {
+  const chartRef = useRef<HTMLDivElement>(null);
+  
+  // Optimized data transformation
+  const chartData = useMemo(() => {
+    return data.map(update => ({
+      timestamp: new Date(update.timestamp),
+      value: update.metrics.rating,
+      propertyId: update.property_id
+    }));
+  }, [data]);
+  
+  useEffect(() => {
+    // Update chart with new data
+    if (chartRef.current && chartData.length > 0) {
+      updateChart(chartRef.current, chartData);
+    }
+  }, [chartData]);
+  
+  return <div ref={chartRef} className="realtime-chart" />;
+});
+
+// Optimized list component for large datasets
+const OptimizedPropertyList = memo(({ properties }: { properties: Property[] }) => {
+  // Virtual scrolling for large lists
+  const virtualListProps = useVirtual({
+    size: properties.length,
+    estimateSize: 50,
+    overscan: 10
+  });
+  
+  return (
+    <div className="virtual-list" {...virtualListPropsProps}>
+      {properties.map((property, index) => (
+        <PropertyItem 
+          key={property.id}
+          property={property}
+          style={{ height: virtualListPropsProps.itemSize }}
+        />
+      ))}
+    </div>
+  );
+});
+```
+
+#### Data Fetching Optimization
+```typescript
+// Optimized data fetching with caching
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { analyticsAPI } from '@/services/analyticsAPI';
+
+export const useOptimizedPropertyData = (propertyId: string) => {
+  const queryClient = useQueryClient();
+  
+  return useQuery({
+    queryKey: ['property', propertyId, 'analytics'],
+    queryFn: () => analyticsAPI.getPropertyAnalytics(propertyId),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    cacheTime: 30 * 60 * 1000, // 30 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    
+    // Background refetching
+    refetchInterval: (data) => {
+      // Only refetch if data is stale
+      return data?.updatedAt && 
+             Date.now() - new Date(data.updatedAt).getTime() > 5 * 60 * 1000 
+             ? 30000 
+             : false;
+    },
+    
+    // Optimistic updates
+    onSuccess: (data) => {
+      // Update related queries
+      queryClient.setQueryData(['portfolio'], (old: PortfolioData) => {
+        if (!old) return old;
+        return {
+          ...old,
+          properties: old.properties.map(p => 
+            p.id === propertyId ? { ...p, ...data } : p
+          )
+        };
+      });
+    }
+  });
+};
+
+// Optimized batch data fetching
+export const useBatchPropertyData = (propertyIds: string[]) => {
+  return useQuery({
+    queryKey: ['properties', 'batch', propertyIds.sort()],
+    queryFn: () => analyticsAPI.getBatchPropertyAnalytics(propertyIds),
+    enabled: propertyIds.length > 0,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    cacheTime: 15 * 60 * 1000, // 15 minutes
+  });
+};
+```
+
+### WebSocket Performance Optimization
+
+#### Message Batching and Throttling
+```typescript
+// Optimized WebSocket message handling
+class OptimizedWebSocketService {
+  private messageQueue: WebSocketMessage[] = [];
+  private batchTimer: NodeJS.Timeout | null = null;
+  private readonly batchSize = 50;
+  private readonly batchTimeout = 100; // 100ms
+  
+  // Throttled update mechanism
+  private updateThrottles = new Map<string, NodeJS.Timeout>();
+  
+  // Batch send messages
+  private sendBatch() {
+    if (this.messageQueue.length === 0) return;
+    
+    const batch = this.messageQueue.splice(0, this.batchSize);
+    const message = {
+      type: 'batch_update',
+      data: batch,
+      timestamp: new Date().toISOString()
+    };
+    
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(message));
+    }
+    
+    this.batchTimer = null;
+  }
+  
+  // Queue message for batch processing
+  queueMessage(message: WebSocketMessage) {
+    this.messageQueue.push(message);
+    
+    if (this.messageQueue.length >= this.batchSize) {
+      this.sendBatch();
+    } else if (!this.batchTimer) {
+      this.batchTimer = setTimeout(() => this.sendBatch(), this.batchTimeout);
+    }
+  }
+  
+  // Throttled updates for UI
+  throttleUpdate(propertyId: string, update: PropertyUpdate) {
+    // Clear existing throttle
+    const existingThrottle = this.updateThrottles.get(propertyId);
+    if (existingThrottle) {
+      clearTimeout(existingThrottle);
+    }
+    
+    // Set new throttle
+    const newThrottle = setTimeout(() => {
+      this.updateUI(propertyId, update);
+      this.updateThrottles.delete(propertyId);
+    }, 100); // 100ms throttle
+    
+    this.updateThrottles.set(propertyId, newThrottle);
+  }
+  
+  private updateUI(propertyId: string, update: PropertyUpdate) {
+    // Update UI with throttled update
+    this.notifyListeners('property_update', { propertyId, update });
+  }
+}
+```
+
+## 📊 Performance Monitoring and Alerting
+
+### Performance Metrics Collection
+```python
+# Custom performance monitoring
+from prometheus_client import Counter, Histogram, Gauge, start_http_server
+import time
+import psutil
+
+class PerformanceMonitor:
+    def __init__(self):
+        # Application metrics
+        self.request_count = Counter('app_requests_total', 'Total requests', ['method', 'endpoint'])
+        self.request_duration = Histogram('app_request_duration_seconds', 'Request duration')
+        self.active_connections = Gauge('app_active_connections', 'Active connections')
+        self.queue_size = Gauge('app_queue_size', 'Queue size')
+        
+        # System metrics
+        self.cpu_usage = Gauge('system_cpu_usage_percent', 'CPU usage percentage')
+        self.memory_usage = Gauge('system_memory_usage_percent', 'Memory usage percentage')
+        self.disk_usage = Gauge('system_disk_usage_percent', 'Disk usage percentage')
+        
+        # Business metrics
+        self.events_processed = Counter('events_processed_total', 'Events processed', ['event_type'])
+        self.websockets_connected = Gauge('websockets_connected', 'Connected WebSocket clients')
+        self.analytics_latency = Histogram('analytics_latency_seconds', 'Analytics processing latency')
+    
+    def record_request(self, method: str, endpoint: str, duration: float):
+        """Record HTTP request metrics"""
+        self.request_count.labels(method=method, endpoint=endpoint).inc()
+        self.request_duration.observe(duration)
+    
+    def record_analytics_processing(self, event_type: str, duration: float):
+        """Record analytics processing metrics"""
+        self.events_processed.labels(event_type=event_type).inc()
+        self.analytics_latency.observe(duration)
+    
+    def update_system_metrics(self):
+        """Update system resource metrics"""
+        # CPU usage
+        cpu_percent = psutil.cpu_percent(interval=1)
+        self.cpu_usage.set(cpu_percent)
+        
+        # Memory usage
+        memory = psutil.virtual_memory()
+        self.memory_usage.set(memory.percent)
+        
+        # Disk usage
+        disk = psutil.disk_usage('/')
+        self.disk_usage.set(disk.percent)
+    
+    def start_monitoring(self, port: int = 8002):
+        """Start Prometheus metrics server"""
+        start_http_server(port)
+        logger.info(f"Performance monitoring started on port {port}")
+```
+
+### Performance Testing Framework
+```python
+# Automated performance testing
+import asyncio
+import aiohttp
+import websockets
+import time
+import statistics
+from concurrent.futures import ThreadPoolExecutor
+
+class PerformanceTester:
+    def __init__(self, base_url: str, ws_url: str):
+        self.base_url = base_url
+        self.ws_url = ws_url
+        self.results = {}
+    
+    async def test_api_performance(self, concurrent_users: int = 100, duration: int = 60):
+        """Test API performance under load"""
+        print(f"Testing API performance: {concurrent_users} users for {duration}s")
+        
+        start_time = time.time()
+        end_time = start_time + duration
+        
+        # Create concurrent sessions
+        async def user_session(session_id: int):
+            response_times = []
+            request_count = 0
+            
+            async with aiohttp.ClientSession() as session:
+                while time.time() < end_time:
+                    try:
+                        # Test analytics endpoint
+                        request_start = time.time()
+                        async with session.get(f"{self.base_url}/api/v1/analytics/overview") as response:
+                            await response.json()
+                            request_time = time.time() - request_start
+                            response_times.append(request_time)
+                            request_count += 1
+                            
+                    except Exception as e:
+                        print(f"Session {session_id} error: {e}")
+                    
+                    # Random delay between requests
+                    await asyncio.sleep(random.uniform(0.1, 0.5))
+            
+            return {
+                'session_id': session_id,
+                'response_times': response_times,
+                'request_count': request_count
+            }
+        
+        # Run concurrent sessions
+        tasks = [user_session(i) for i in range(concurrent_users)]
+        results = await asyncio.gather(*tasks)
+        
+        # Analyze results
+        all_response_times = []
+        total_requests = 0
+        
+        for result in results:
+            all_response_times.extend(result['response_times'])
+            total_requests += result['request_count']
+        
+        if all_response_times:
+            self.results['api_performance'] = {
+                'total_requests': total_requests,
+                'avg_response_time': statistics.mean(all_response_times),
+                'p50_response_time': statistics.median(all_response_times),
+                'p95_response_time': statistics.quantiles(all_response_times, n=20)[18],  # 95th percentile
+                'p99_response_time': statistics.quantiles(all_response_times, n=100)[98], # 99th percentile
+                'min_response_time': min(all_response_times),
+                'max_response_time': max(all_response_times),
+                'requests_per_second': total_requests / duration
+            }
+        
+        return self.results['api_performance']
+    
+    async def test_websocket_performance(self, concurrent_connections: int = 1000):
+        """Test WebSocket performance under load"""
+        print(f"Testing WebSocket performance: {concurrent_connections} connections")
+        
+        # Track connection metrics
+        connection_results = {
+            'successful_connections': 0,
+            'failed_connections': 0,
+            'message_latencies': [],
+            'connection_times': []
+        }
+        
+        async def websocket_session(session_id: int):
+            try:
+                connection_start = time.time()
+                
+                # Connect to WebSocket
+                async with websockets.connect(self.ws_url) as websocket:
+                    connection_time = time.time() - connection_start
+                    connection_results['connection_times'].append(connection_time)
+                    connection_results['successful_connections'] += 1
+                    
+                    # Send test message and measure response time
+                    test_message = {
+                        'type': 'analytics_request',
+                        'request_type': 'overview',
+                        'session_id': session_id
+                    }
+                    
+                    message_start = time.time()
+                    await websocket.send(json.dumps(test_message))
+                    
+                    try:
+                        response = await asyncio.wait_for(websocket.recv(), timeout=5.0)
+                        message_latency = time.time() - message_start
+                        connection_results['message_latencies'].append(message_latency)
+                    except asyncio.TimeoutError:
+                        print(f"Session {session_id} timeout")
+                    
+                    # Keep connection alive for 30 seconds
+                    await asyncio.sleep(30)
+                    
+            except Exception as e:
+                connection_results['failed_connections'] += 1
+                print(f"Session {session_id} failed: {e}")
+        
+        # Create concurrent connections
+        tasks = [websocket_session(i) for i in range(concurrent_connections)]
+        await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Analyze WebSocket results
+        if connection_results['message_latencies']:
+            self.results['websocket_performance'] = {
+                'total_connections': concurrent_connections,
+                'successful_connections': connection_results['successful_connections'],
+                'failed_connections': connection_results['failed_connections'],
+                'success_rate': connection_results['successful_connections'] / concurrent_connections * 100,
+                'avg_connection_time': statistics.mean(connection_results['connection_times']),
+                'avg_message_latency': statistics.mean(connection_results['message_latencies']),
+                'p95_message_latency': statistics.quantiles(connection_results['message_latencies'], n=20)[18],
+                'p99_message_latency': statistics.quantiles(connection_results['message_latencies'], n=100)[98]
+            }
+        
+        return self.results['websocket_performance']
+    
+    def generate_performance_report(self) -> str:
+        """Generate performance test report"""
+        report = "Flex Living Performance Test Report\n"
+        report += "=" * 40 + "\n\n"
+        
+        if 'api_performance' in self.results:
+            api_results = self.results['api_performance']
+            report += "API Performance:\n"
+            report += f"  Total Requests: {api_results['total_requests']}\n"
+            report += f"  Average Response Time: {api_results['avg_response_time']*1000:.2f}ms\n"
+            report += f"  95th Percentile: {api_results['p95_response_time']*1000:.2f}ms\n"
+            report += f"  99th Percentile: {api_results['p99_response_time']*1000:.2f}ms\n"
+            report += f"  Requests/Second: {api_results['requests_per_second']:.2f}\n\n"
+        
+        if 'websocket_performance' in self.results:
+            ws_results = self.results['websocket_performance']
+            report += "WebSocket Performance:\n"
+            report += f"  Total Connections: {ws_results['total_connections']}\n"
+            report += f"  Success Rate: {ws_results['success_rate']:.2f}%\n"
+            report += f"  Average Connection Time: {ws_results['avg_connection_time']*1000:.2f}ms\n"
+            report += f"  Average Message Latency: {ws_results['avg_message_latency']*1000:.2f}ms\n"
+            report += f"  95th Percentile Latency: {ws_results['p95_message_latency']*1000:.2f}ms\n"
+            report += f"  99th Percentile Latency: {ws_results['p99_message_latency']*1000:.2f}ms\n\n"
+        
+        # Performance score
+        score = self.calculate_performance_score()
+        report += f"Overall Performance Score: {score}/100\n"
+        
+        if score >= 90:
+            report += "Status: EXCELLENT ✅\n"
+        elif score >= 80:
+            report += "Status: GOOD ✅\n"
+        elif score >= 70:
+            report += "Status: ACCEPTABLE ⚠️\n"
+        else:
+            report += "Status: NEEDS IMPROVEMENT ❌\n"
+        
+        return report
+    
+    def calculate_performance_score(self) -> int:
+        """Calculate overall performance score (0-100)"""
+        score = 0
+        
+        if 'api_performance' in self.results:
+            api_results = self.results['api_performance']
+            
+            # Response time score (40 points max)
+            avg_response_time = api_results['avg_response_time'] * 1000
+            if avg_response_time <= 50:
+                score += 40
+            elif avg_response_time <= 100:
+                score += 30
+            elif avg_response_time <= 200:
+                score += 20
+            else:
+                score += 10
+            
+            # Throughput score (30 points max)
+            rps = api_results['requests_per_second']
+            if rps >= 1000:
+                score += 30
+            elif rps >= 500:
+                score += 20
+            elif rps >= 100:
+                score += 10
+            
+            # Percentile score (30 points max)
+            p95_time = api_results['p95_response_time'] * 1000
+            if p95_time <= 100:
+                score += 30
+            elif p95_time <= 200:
+                score += 20
+            elif p95_time <= 500:
+                score += 10
+        
+        if 'websocket_performance' in self.results:
+            ws_results = self.results['websocket_performance']
+            
+            # WebSocket score (25 points max)
+            success_rate = ws_results['success_rate']
+            if success_rate >= 99:
+                score += 25
+            elif success_rate >= 95:
+                score += 20
+            elif success_rate >= 90:
+                score += 15
+            
+            # Latency score (25 points max)
+            avg_latency = ws_results['avg_message_latency'] * 1000
+            if avg_latency <= 50:
+                score += 25
+            elif avg_latency <= 100:
+                score += 20
+            elif avg_latency <= 200:
+                score += 15
+        
+        return min(score, 100)
+```
+
+## 🎯 Performance Optimization Checklist
+
+### Pre-Production Optimization
+- [ ] Database indexes optimized for common queries
+- [ ] Connection pools configured appropriately
+- [ ] Caching strategy implemented and tested
+- [ ] WebSocket connection limits and timeouts configured
+- [ ] Memory usage patterns analyzed and optimized
+- [ ] CPU usage patterns reviewed and optimized
+- [ ] Load balancing configured for horizontal scaling
+- [ ] SSL/TLS optimization implemented
+- [ ] Static assets optimized and CDN configured
+- [ ] Error handling and recovery mechanisms tested
+
+### Runtime Optimization
+- [ ] Real-time monitoring dashboards configured
+- [ ] Performance alerts set up for critical thresholds
+- [ ] Automated scaling policies configured
+- [ ] Database query performance monitoring enabled
+- [ ] Memory leak detection and prevention active
+- [ ] Connection pool monitoring and optimization
+- [ ] Cache hit rate monitoring and optimization
+- [ ] WebSocket performance monitoring enabled
+- [ ] API response time monitoring and alerting
+- [ ] Business metrics tracking and analysis
+
+### Continuous Optimization
+- [ ] Regular performance testing scheduled
+- [ ] Performance regression detection automated
+- [ ] Capacity planning and forecasting active
+- [ ] Performance optimization reviews scheduled
+- [ ] Technology stack updates and upgrades planned
+- [ ] Performance optimization training for team
+- [ ] Best practices documentation maintained
+- [ ] Performance optimization initiatives tracked
+
+---
+
+**Performance Guide Version**: 1.0.0  
+**Last Updated**: 2025-11-07  
+**Review Schedule**: Quarterly  
+**Owner**: Performance Engineering Team

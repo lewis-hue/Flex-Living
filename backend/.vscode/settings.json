@@ -1,0 +1,26 @@
+{
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.typeCheckingMode": "strict",
+    "python.analysis.autoSearchPaths": true,
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.stubPath": "./typings",
+    "python.analysis.extraPaths": [
+        "./flex_back"
+    ],
+    "python.defaultInterpreterPath": "./flex_back/.venv/bin/python",
+    "python.terminal.activateEnvironment": true,
+    "python.analysis.packageIndexDepths": [
+        {
+            "name": "app",
+            "path": "./flex_back"
+        }
+    ],
+    "python.analysis.include": [
+        "flex_back/**"
+    ],
+    "python.analysis.exclude": [
+        "**/node_modules",
+        "**/venv",
+        "**/.*"
+    ]
+}

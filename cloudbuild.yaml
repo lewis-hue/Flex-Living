@@ -1,0 +1,90 @@
+steps:
+  # Step 1: Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: 
+      - 'build'
+      - '-t'
+      - '$_CONTAINER_REGION-$_PROJECT_ID.$_REGION-docker.pkg.dev/$_PROJECT_ID/$_REPOSITORY_NAME/$_SERVICE_NAME:latest'
+      - '-t'
+      - '$_SERVICE_NAME:latest'
+      - '.'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+
+  # Step 2: Push image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '$_CONTAINER_REGION-$_PROJECT_ID.$_REGION-docker.pkg.dev/$_PROJECT_ID/$_REPOSITORY_NAME/$_SERVICE_NAME:latest'
+
+  # Step 3: Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - '$_SERVICE_NAME'
+      - '--image=$_CONTAINER_REGION-$_PROJECT_ID.$_REGION-docker.pkg.dev/$_PROJECT_ID/$_REPOSITORY_NAME/$_SERVICE_NAME:latest'
+      - '--region=$_REGION'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--port=8080'
+      - '--memory=1Gi'
+      - '--cpu=1'
+      - '--min-instances=0'
+      - '--max-instances=10'
+      - '--concurrency=100'
+      - '--timeout=3600s'
+      - '--execution-environment=gen2'
+      - '--set-env-vars=ENVIRONMENT=production'
+      - '--set-env-vars=DEBUG=false'
+      - '--set-env-vars=LOG_LEVEL=INFO'
+      - '--set-env-vars=HOST=0.0.0.0'
+      - '--set-env-vars=PORT=8080'
+      - '--set-env-vars=CORS_ORIGINS=https://$_SERVICE_URL'
+      - '--set-env-vars=FRONTEND_URL=https://$_SERVICE_URL'
+      - '--set-env-vars=MONGODB_URL=${_MONGODB_URL}'
+      - '--set-env-vars=MONGODB_DATABASE=${_MONGODB_DATABASE}'
+      - '--set-env-vars=JWT_SECRET=${_JWT_SECRET}'
+      - '--set-env-vars=ENCRYPTION_KEY=${_ENCRYPTION_KEY}'
+      - '--set-env-vars=GROQ_API_KEY=${_GROQ_API_KEY}'
+      - '--set-env-vars=HOSTAWAY_API_KEY=${_HOSTAWAY_API_KEY}'
+      - '--set-env-vars=HOSTAWAY_ACCOUNT_ID=${_HOSTAWAY_ACCOUNT_ID}'
+      - '--set-env-vars=SENDGRID_API_KEY=${_SENDGRID_API_KEY}'
+      - '--set-env-vars=FROM_EMAIL=${_FROM_EMAIL}'
+      - '--set-env-vars=ENABLE_EMAIL_NOTIFICATIONS=true'
+      - '--set-env-vars=ENABLE_AI_ANALYSIS=true'
+      - '--set-env-vars=ENABLE_RATE_LIMITING=true'
+      - '--set-env-vars=ENABLE_CORS=true'
+      - '--set-env-vars=ENABLE_HOSTAWAY_INTEGRATION=true'
+
+  # Step 4: Get Cloud Run service URL
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'services'
+      - 'describe'
+      - '$_SERVICE_NAME'
+      - '--platform=managed'
+      - '--region=$_REGION'
+      - '--format=value(status.url)'
+    id: 'get-service-url'
+    waitFor: ['deploy']
+
+substitutions:
+  _SERVICE_NAME: 'flex-living-app'
+  _REPOSITORY_NAME: 'flex-living-repo'
+  _REGION: 'us-central1'
+  _CONTAINER_REGION: 'us'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'e2-highcpu-2'
+  substitution_option: 'ALLOW_LOOSE'
+
+timeout: '1800s'
+tags:
+  - 'flex-living'
+  - 'fullstack'
+  - 'production'

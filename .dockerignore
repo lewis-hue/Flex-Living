@@ -1,0 +1,213 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md
+docs/
+README.md
+
+# Testing
+.coverage
+.pytest_cache/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Database
+*.db
+*.sqlite3
+migrations/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
+backend/flex_back/.env
+frontend/.env
+
+# Temporary files
+.tmp/
+tmp/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Package manager lockfiles (keep yarn.lock)
+package-lock.json
+pnpm-lock.yaml
+
+# Build artifacts
+build/
+dist/
+.next/
+out/
+
+# Development files
+.prettierrc
+.eslintrc*
+jest.config.js
+tsconfig.json
+tailwind.config.js
+postcss.config.js
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# TypeScript
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# Serverless directories
+.serverless/
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Frontend build files that shouldn't be copied
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/dist/
+
+# Development dependencies that aren't needed in production
+frontend/.eslintrc*
+frontend/bun.lockb
+
+# Backend development files
+backend/flex_back/tests/
+backend/flex_back/docs/
+backend/flex_back/scripts/
+
+# Database setup files (use for development only)
+database/setup/
+database/scripts/
+
+# Analytics and monitoring data
+logs/
+data/
+*.log
+
+# SSL certificates (should be mounted as volumes)
+*.pem
+*.key
+*.crt
+
+# Backup files
+*.bak
+*.backup
+
+# AI/ML model files (too large for container)
+models/
+*.model
+*.pkl
+*.h5
+
+# Large media files
+videos/
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# Backup databases
+*.dump
+*.sql.backup

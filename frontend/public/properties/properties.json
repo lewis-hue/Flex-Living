@@ -1,0 +1,110 @@
+[
+  {
+    "property_id": "prop_001",
+    "name": "The Architectural Masterpiece",
+    "address": "88 Skyline Drive",
+    "city": "Los Angeles",
+    "country": "USA",
+    "type": "penthouse",
+    "price_range": "$25M - $60M+",
+    "rating": 3.53,
+    "created_at": "2025-11-09T09:00:00Z",
+    "updated_at": "2025-11-09T09:00:00Z"
+  },
+  {
+    "property_id": "prop_002",
+    "name": "The Coastal Dream",
+    "address": "14 Oceanfront Avenue",
+    "city": "Malibu",
+    "country": "USA",
+    "type": "villa",
+    "price_range": "$18M - $45M",
+    "rating": 3.59,
+    "created_at": "2025-11-09T09:00:00Z",
+    "updated_at": "2025-11-09T09:00:00Z"
+  },
+  {
+    "property_id": "prop_003",
+    "name": "The Contemporary Villa",
+    "address": "21 Palm Grove Lane",
+    "city": "Miami",
+    "country": "USA",
+    "type": "villa",
+    "price_range": "$12M - $35M",
+    "rating": 3.33,
+    "created_at": "2025-11-09T09:00:00Z",
+    "updated_at": "2025-11-09T09:00:00Z"
+  },
+  {
+    "property_id": "prop_004",
+    "name": "The Elegant Estate",
+    "address": "19 Kingsborough Road",
+    "city": "London",
+    "country": "UK",
+    "type": "estate",
+    "price_range": "\u00a310M - \u00a340M",
+    "rating": 3.71,
+    "created_at": "2025-11-09T09:00:00Z",
+    "updated_at": "2025-11-09T09:00:00Z"
+  },
+  {
+    "property_id": "prop_005",
+    "name": "The Grand Estate",
+    "address": "1234 Estate Lane",
+    "city": "Greenwich",
+    "country": "USA",
+    "type": "villa",
+    "price_range": "$15M - $50M+",
+    "rating": 3.85,
+    "created_at": "2025-11-09T09:00:00Z",
+    "updated_at": "2025-11-09T09:00:00Z"
+  },
+  {
+    "property_id": "prop_006",
+    "name": "The Luxury Haven",
+    "address": "77 Serenity Boulevard",
+    "city": "Dubai",
+    "country": "UAE",
+    "type": "mansion",
+    "price_range": "$30M - $75M",
+    "rating": 3.54,
+    "created_at": "2025-11-09T09:00:00Z",
+    "updated_at": "2025-11-09T09:00:00Z"
+  },
+  {
+    "property_id": "prop_007",
+    "name": "The Mountain Retreat",
+    "address": "65 Aspen Ridge Trail",
+    "city": "Aspen",
+    "country": "USA",
+    "type": "chalet",
+    "price_range": "$10M - $28M",
+    "rating": 3.37,
+    "created_at": "2025-11-09T09:00:00Z",
+    "updated_at": "2025-11-09T09:00:00Z"
+  },
+  {
+    "property_id": "prop_008",
+    "name": "The Suburban Sanctuary",
+    "address": "91 Willow Creek Drive",
+    "city": "Toronto",
+    "country": "Canada",
+    "type": "house",
+    "price_range": "$5M - $15M",
+    "rating": 3.51,
+    "created_at": "2025-11-09T09:00:00Z",
+    "updated_at": "2025-11-09T09:00:00Z"
+  },
+  {
+    "property_id": "prop_009",
+    "name": "The Urban Mansion",
+    "address": "9 Park Avenue",
+    "city": "New York",
+    "country": "USA",
+    "type": "mansion",
+    "price_range": "$20M - $55M",
+    "rating": 3.47,
+    "created_at": "2025-11-09T09:00:00Z",
+    "updated_at": "2025-11-09T09:00:00Z"
+  }
+]

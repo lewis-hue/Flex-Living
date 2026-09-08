@@ -1,0 +1,15 @@
+# Core FastAPI and ASGI
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Data Validation
+pydantic==2.4.2
+
+# Environment and Configuration
+python-dotenv==1.0.0
+
+# Authentication and Security
+python-jose[cryptography]==3.3.0
+
+# File Upload Support
+python-multipart==0.0.6

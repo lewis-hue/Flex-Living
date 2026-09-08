@@ -1,0 +1,48 @@
+# Python
+venv/
+.venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+npm-debug.log*
+
+# Secrets - never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*credentials*.json
+*service*account*.json
+service-account*.json
+
+# Data / DB / logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+logs/
+uploads/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

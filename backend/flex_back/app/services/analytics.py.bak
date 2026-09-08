@@ -1,0 +1,235 @@
+from typing import Dict, Optional
+import groq
+import json
+from datetime import datetime
+from ..core.config import get_settings
+from ..core.logger import logger
+
+settings = get_settings()
+
+class AnalyticsService:
+    def __init__(self):
+        try:
+            self.groq_client = groq.Client(
+                api_key=settings.GROQ_API_KEY,
+                timeout=120.0
+            )
+        except Exception as e:
+            print(f"Warning: Failed to initialize Groq client: {e}")
+            self.groq_client = None
+        
+    async def test_groq_connection(self) -> Dict:
+        """Test Groq AI service connection"""
+        if not self.groq_client:
+            return {"status": "error", "message": "Groq client not initialized"}
+            
+        try:
+            response = self.groq_client.chat.completions.create(
+                messages=[{"role": "user", "content": "Test connection"}],
+                model="mixtral-8x7b-32768",
+                temperature=0.1,
+                max_tokens=10
+            )
+            if response and response.choices:
+                print("✅ Groq AI service test successful")
+                return {"status": "success", "message": "Groq AI service is working correctly"}
+            else:
+                raise Exception("Invalid response format")
+        except Exception as e:
+            error_msg = f"❌ Groq AI service test failed: {str(e)}"
+            print(error_msg)
+            return {"status": "error", "message": error_msg}
+
+    class AnalyticsService:
+    def __init__(self):
+        try:
+            self.groq_client = groq.Client(
+                api_key=settings.GROQ_API_KEY,
+                timeout=120.0
+            )
+        except Exception as e:
+            print(f"Warning: Failed to initialize Groq client: {e}")
+            self.groq_client = None
+        
+    async def analyze_review_sentiment(self, review_text: str) -> Dict:
+        """Analyze sentiment of review text using Groq AI"""
+        try:
+            prompt = f"""Analyze the sentiment of this property review and extract key topics.
+            Return the analysis in JSON format with the following structure:
+            {{
+                "sentiment": "positive|neutral|negative",
+                "sentiment_score": float between -1 and 1,
+                "topics": ["topic1", "topic2", ...],
+                "confidence": float between 0 and 1,
+                "key_phrases": ["phrase1", "phrase2", ...]
+            }}
+            
+            Review: {review_text}
+            """
+            
+            completion = self.groq_client.chat.completions.create(
+                model="mixtral-8x7b-32768",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=500
+            )
+            
+            result = json.loads(completion.choices[0].message.content)
+            
+            # Validate response format
+            required_fields = ["sentiment", "sentiment_score", "topics"]
+            if not all(field in result for field in required_fields):
+                raise ValueError("Invalid response format from Groq AI")
+                
+            result["processed_at"] = datetime.utcnow().isoformat()
+            return result
+            
+        except Exception as e:
+            print(f"❌ Groq sentiment analysis failed: {e}")
+            return {
+                "sentiment": "neutral",
+                "sentiment_score": 0,
+                "topics": [],
+                "confidence": 0,
+                "error": str(e),
+                "processed_at": datetime.utcnow().isoformat()
+            }
+    
+    async def process_new_review(self, review_data: Dict):
+        """Process a new review and update analytics"""
+        # Analyze sentiment
+        analysis = await self.analyze_review_sentiment(review_data['review_text'])
+        
+        # Create review analytics
+        review_analytics = ReviewAnalytics(
+            review_id=review_data['_id'],
+            property_id=review_data['property_id'],
+            sentiment=analysis['sentiment'],
+            topics=analysis['topics'],
+            sentiment_score=analysis['sentiment_score']
+        )
+        
+        # Update property analytics
+        await self.update_property_analytics(review_data['property_id'])
+        
+        # Store review analytics
+        await db.get_collection(settings.ANALYTICS_COLLECTION).insert_one(
+            review_analytics.model_dump()
+        )
+        
+    async def update_property_analytics(self, property_id: str):
+        """Update analytics for a specific property"""
+        # Get all reviews for property
+        reviews = await db.get_collection(settings.REVIEW_COLLECTION).find(
+            {"property_id": property_id}
+        ).to_list(length=None)
+        
+        # Calculate metrics
+        df = pd.DataFrame(reviews)
+        analytics = PropertyAnalytics(
+            property_id=property_id,
+            average_rating=df['rating'].mean(),
+            total_reviews=len(reviews),
+            sentiment_distribution=self._calculate_sentiment_distribution(df),
+            common_topics=self._extract_common_topics(df)
+        )
+        
+        # Update or insert property analytics
+        await db.get_collection(settings.PROPERTY_ANALYTICS_COLLECTION).update_one(
+            {"property_id": property_id},
+            {"$set": analytics.model_dump()},
+            upsert=True
+        )
+        
+        # Update visualizations
+        await self.update_property_visualizations(property_id)
+        
+    def _calculate_sentiment_distribution(self, df: pd.DataFrame) -> Dict:
+        """Calculate sentiment distribution from reviews"""
+        sentiment_counts = df['sentiment'].value_counts(normalize=True).to_dict()
+        return {
+            'positive': sentiment_counts.get('positive', 0.0),
+            'neutral': sentiment_counts.get('neutral', 0.0),
+            'negative': sentiment_counts.get('negative', 0.0)
+        }
+        
+    def _extract_common_topics(self, df: pd.DataFrame) -> List[Dict[str, float]]:
+        """Extract common topics from reviews"""
+        all_topics = []
+        for topics in df['topics']:
+            all_topics.extend(topics)
+            
+        topic_counts = pd.Series(all_topics).value_counts()
+        return [
+            {"topic": topic, "frequency": float(count)}
+            for topic, count in topic_counts.items()
+        ]
+        
+    async def update_property_visualizations(self, property_id: str):
+        """Update visualizations for a property"""
+        property_data = await db.get_collection(settings.PROPERTY_COLLECTION).find_one(
+            {"_id": property_id}
+        )
+        
+        if not property_data:
+            return
+            
+        # Create sentiment distribution chart
+        sentiment_viz = VisualizationData(
+            viz_id=f"{property_id}_sentiment",
+            property_id=property_id,
+            viz_type="pie_chart",
+            data={
+                "labels": ["Positive", "Neutral", "Negative"],
+                "values": [
+                    property_data.get('sentiment_distribution', {}).get('positive', 0),
+                    property_data.get('sentiment_distribution', {}).get('neutral', 0),
+                    property_data.get('sentiment_distribution', {}).get('negative', 0)
+                ]
+            }
+        )
+        
+        # Create rating trend chart
+        reviews = await db.get_collection(settings.REVIEW_COLLECTION).find(
+            {"property_id": property_id}
+        ).sort("created_at", 1).to_list(length=None)
+        
+        df = pd.DataFrame(reviews)
+        df['created_at'] = pd.to_datetime(df['created_at'])
+        monthly_ratings = df.set_index('created_at')['rating'].resample('M').mean()
+        
+        rating_viz = VisualizationData(
+            viz_id=f"{property_id}_rating_trend",
+            property_id=property_id,
+            viz_type="line_chart",
+            data={
+                "labels": monthly_ratings.index.strftime('%Y-%m').tolist(),
+                "values": monthly_ratings.tolist()
+            }
+        )
+        
+        # Store visualizations
+        for viz in [sentiment_viz, rating_viz]:
+            await db.get_collection(settings.VISUALIZATION_COLLECTION).update_one(
+                {"viz_id": viz.viz_id},
+                {"$set": viz.model_dump()},
+                upsert=True
+            )
+            
+    async def get_property_analytics(self, property_id: str) -> Dict:
+        """Get all analytics data for a property"""
+        analytics = await db.get_collection(settings.PROPERTY_ANALYTICS_COLLECTION).find_one(
+            {"property_id": property_id}
+        )
+        
+        visualizations = await db.get_collection(settings.VISUALIZATION_COLLECTION).find(
+            {"property_id": property_id}
+        ).to_list(length=None)
+        
+        return {
+            "analytics": analytics,
+            "visualizations": visualizations
+        }
+
+# Create analytics service instance
+analytics_service = AnalyticsService()
