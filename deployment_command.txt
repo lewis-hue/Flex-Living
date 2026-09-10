@@ -1,7 +1,0 @@
-gcloud run deploy flexliving-backend \
-  --image=gcr.io/datascrapex-470817/flexliving-backend:latest \
-  --platform=managed \
-  --region=us-central1 \
-  --allow-unauthenticated \
-  --port=8080 \
-  --set-env-vars="MONGODB_URL=mongodb+srv://USER:PASSWORD@CLUSTER.mongodb.net/ Living,FRONTEND_URL=http://localhost:8080,TEST_EMAIL=lewiemuguna417@gmail.com,ENVIRONMENT=production,DEBUG=false,LOG_LEVEL=INFO,HOST=0.0.0.0,PORT=8080"
